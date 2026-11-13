@@ -1,35 +1,29 @@
 # Simulador de cuotas – Pregrado (UP)
 
-Herramienta referencial para orientar a estudiantes sobre el cálculo de sus 5 cuotas de Pregrado.
-Replica la lógica del Excel *Simulador de Cuotas Pregrado_VF*.
+Demo del simulador de cuotas de Pregrado (Tesorería – Dirección Financiera). Explica al alumno cuánto pagará
+en cada cuota y **cómo se calcula** cada monto. En producción irá dentro de la web de pagos virtuales,
+donde la escala y los cursos del alumno llegan del sistema al iniciar sesión.
 
-## Regla de cálculo
-- **Cuota 1:** 3.8 créditos administrativos × valor por crédito + derecho de enseñanza (S/ 380 por defecto).
-- **Cuotas 2 a 5:** `(créditos adm. − extra académicos − 3.8) / 4` créditos + `extra académicos / 4` créditos, × valor por crédito.
-- Cada cuota se redondea a 2 decimales.
-
-Las escalas y el valor por crédito están en `calculo.py` (`ESCALAS`). Para actualizar las escalas de otro año, edita solo ese diccionario.
-
-## Correr en local
-```bash
-python -m venv .venv
-# Windows: .venv\Scripts\activate   |   Mac/Linux: source .venv/bin/activate
-pip install -r requirements.txt
-streamlit run app.py
-```
-
-## Pruebas
-```bash
-pip install pytest
-pytest
-```
+## Regla de cálculo (igual al Excel *Simulador de Cuotas Pregrado_VF*)
+- **Cuota 1:** 3.8 créditos × valor del crédito + derecho de matrícula (S/ 380, fijo).
+- **Cuotas 2 a 5:** [(créditos de cursos − 3.8) / 4 + créditos de talleres / 4] × valor del crédito.
+- Cada cuota se redondea a 2 decimales. Créditos de 0.5 en 0.5.
 
 ## Estructura
 ```
-app.py               # interfaz Streamlit
-calculo.py           # lógica (sin dependencias de Streamlit)
-test_calculo.py      # pruebas con el ejemplo del Excel
-.streamlit/config.toml  # tema con los colores institucionales
+app.py            # interfaz Streamlit (demo, con alumnos de ejemplo en la barra lateral)
+calculo.py        # lógica y textos explicativos (sin Streamlit) · periodo, escalas y matrícula aquí
+datos_alumno.py   # formato de los datos del alumno + alumnos ficticios para la demo
+pdf_resumen.py    # resumen imprimible en PDF
+test_calculo.py   # pruebas
+.streamlit/config.toml
 ```
 
-> Montos referenciales. Validar los importes definitivos según las disposiciones institucionales vigentes.
+## Correr en local
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+pytest
+```
+
+> Montos referenciales. Los importes definitivos son los que figuran en la boleta.

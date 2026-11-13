@@ -1,15 +1,19 @@
+"""Simulador de cuotas – Pregrado (demo).
+
+En producción este simulador va dentro de la web de pagos virtuales: el alumno ya inició sesión,
+así que su escala y sus cursos llegan del sistema. Aquí se simulan con alumnos de ejemplo.
+"""
 import streamlit as st
 
-from calculo import CREDITOS_CUOTA_1, DERECHO_ENSENANZA, ESCALAS, calcular
+from calculo import (DERECHO_MATRICULA, ESCALAS, PASO_CREDITOS, PERIODO,
+                     calcular, explicacion, fmt, resumen_texto, soles)
+from datos_alumno import ALUMNOS_DEMO
+from pdf_resumen import generar_pdf
 
-st.set_page_config(page_title="Simulador de cuotas – Pregrado", page_icon="🧮", layout="wide")
+st.set_page_config(page_title="Simulador de cuotas – Pregrado", page_icon="🧮", layout="wide",
+                   initial_sidebar_state="collapsed")
 
 NAVY, GREEN, BLUE, CYAN, MAGENTA = "#0E1F43", "#00FF24", "#0062FF", "#61F2F2", "#D733FF"
-
-
-def soles(x: float) -> str:
-    return f"S/ {x:,.2f}"
-
 
 st.markdown(f"""
 <style>
@@ -21,42 +25,46 @@ html, body, [class*="css"], .stMarkdown, label {{ font-family: 'Open Sans', Aria
 .hero h1 {{ font-family:Montserrat,Arial,sans-serif; color:{GREEN}; font-weight:800; font-size:34px; text-transform:uppercase; margin:18px 0 4px; padding:0; }}
 .hero .sub {{ font-family:Montserrat,Arial,sans-serif; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }}
 .hero .bar {{ width:120px; height:7px; background:{GREEN}; margin:12px 0 8px; }}
-.hero .note {{ font-size:13px; opacity:.8; }}
+.hero .note {{ font-size:13px; opacity:.85; }}
 .sq {{ position:absolute; display:block; }}
-.tag {{ display:inline-block; background:{NAVY}; color:{GREEN}; font-family:Montserrat,Arial,sans-serif; font-weight:800; font-size:13px; letter-spacing:.06em; text-transform:uppercase; padding:5px 10px; margin-bottom:10px; }}
-.cuota {{ display:flex; align-items:center; gap:14px; border:1.5px solid #DCE1EC; border-radius:9px; padding:11px 14px; margin-bottom:8px; }}
+.tag {{ display:inline-block; background:{NAVY}; color:{GREEN}; font-family:Montserrat,Arial,sans-serif; font-weight:800; font-size:13px; letter-spacing:.06em; text-transform:uppercase; padding:5px 10px; margin:6px 0 12px; }}
+.fixed {{ background:#fff; border:1.5px solid #DCE1EC; border-radius:9px; padding:12px 14px; margin-bottom:10px; }}
+.fixed .k {{ font-size:12px; color:#5B6782; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }}
+.fixed .v {{ font-family:Montserrat,Arial,sans-serif; font-weight:800; font-size:18px; color:{NAVY}; }}
+.fixed .h {{ font-size:12px; color:#5B6782; }}
+.src {{ display:inline-block; font-size:11px; font-weight:700; color:{BLUE}; background:#E8F0FF; border-radius:4px; padding:2px 6px; margin-left:6px; vertical-align:middle; }}
+.cuota {{ display:flex; align-items:center; gap:14px; border:1.5px solid #DCE1EC; border-radius:9px; padding:11px 14px; margin-bottom:8px; background:#fff; }}
 .cuota.first {{ border-color:{BLUE}; background:#F2F7FF; }}
 .cuota .n {{ min-width:44px; height:44px; border-radius:8px; background:{NAVY}; color:{GREEN}; display:flex; align-items:center; justify-content:center; font-family:Montserrat,Arial,sans-serif; font-weight:800; font-size:18px; }}
 .cuota .t {{ font-weight:700; color:{NAVY}; }}
 .cuota .d {{ font-size:12.5px; color:#5B6782; }}
 .cuota .m {{ margin-left:auto; font-family:Montserrat,Arial,sans-serif; font-weight:800; font-size:19px; color:{NAVY}; white-space:nowrap; }}
-.total {{ display:flex; justify-content:space-between; align-items:center; background:{NAVY}; color:#fff; border-radius:9px; padding:15px 18px; margin-top:10px; margin-bottom:14px; }}
+.total {{ display:flex; justify-content:space-between; align-items:center; background:{NAVY}; color:#fff; border-radius:9px; padding:15px 18px; margin:10px 0 14px; }}
 .total .l {{ font-family:Montserrat,Arial,sans-serif; font-weight:700; text-transform:uppercase; letter-spacing:.05em; font-size:14px; }}
 .total .m {{ font-family:Montserrat,Arial,sans-serif; font-weight:800; font-size:26px; color:{GREEN}; }}
+.step {{ display:flex; gap:14px; background:#fff; border-left:5px solid {GREEN}; border-radius:6px; padding:12px 14px; margin-bottom:8px; }}
+.step .i {{ min-width:30px; height:30px; border-radius:50%; background:{BLUE}; color:#fff; font-weight:800; display:flex; align-items:center; justify-content:center; font-family:Montserrat,Arial,sans-serif; }}
+.step .ti {{ font-weight:700; color:{NAVY}; margin-bottom:2px; }}
+.step .tx {{ font-size:14px; color:#2B3754; }}
 .disc {{ font-size:12.5px; color:#5B6782; border-left:4px solid {GREEN}; padding:6px 12px; margin-top:16px; }}
-div[data-testid="stMetricValue"] {{ font-family:Montserrat,Arial,sans-serif; font-weight:800; color:{NAVY}; font-size:1.35rem; }}
 </style>
 """, unsafe_allow_html=True)
 
-# --- Estado inicial / restablecer
-DEF = {"periodo": "2026-II", "escala": "5", "adm": 21.0, "extra": 1.0, "derecho": DERECHO_ENSENANZA}
-for k, v in DEF.items():
-    st.session_state.setdefault(k, v)
+# --- Datos del alumno (en producción vienen de la sesión en la web de pagos) ---
+with st.sidebar:
+    st.markdown("**Modo demostración**")
+    st.caption("En la web de pagos virtuales estos datos llegan del sistema al iniciar sesión. "
+               "Aquí puedes elegir un alumno de ejemplo para ver los dos casos.")
+    caso = st.radio("Alumno de ejemplo", list(ALUMNOS_DEMO), label_visibility="collapsed")
+alumno = ALUMNOS_DEMO[caso]
 
-
-def restablecer():
-    for k, v in DEF.items():
-        st.session_state[k] = v
-
-
-periodo = st.session_state["periodo"] or "—"
 st.markdown(f"""
 <div class="hero">
   <div class="brand">Universidad<br>del Pacífico</div>
   <h1>Simulador de cuotas</h1>
-  <div class="sub">Pregrado · {periodo}</div>
+  <div class="sub">Pregrado · {PERIODO}</div>
   <div class="bar"></div>
-  <div class="note">Herramienta referencial para orientación de estudiantes</div>
+  <div class="note">Conoce cuánto pagarás en cada cuota y cómo se calcula cada monto.</div>
   <span class="sq" style="right:120px;top:30px;width:34px;height:20px;background:{MAGENTA}"></span>
   <span class="sq" style="right:60px;top:62px;width:56px;height:20px;background:{CYAN}"></span>
   <span class="sq" style="right:170px;top:98px;width:26px;height:18px;background:{BLUE}"></span>
@@ -64,77 +72,65 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-col_in, col_out = st.columns([1, 1.7], gap="large")
+col_in, col_out = st.columns([1, 1.6], gap="large")
 
 with col_in:
-    st.markdown('<div class="tag">1. Ingresa los datos</div>', unsafe_allow_html=True)
-    st.text_input("Periodo académico", key="periodo")
-    st.radio(
-        "Escala asignada",
-        options=list(ESCALAS),
-        format_func=lambda k: f"{k}  (S/ {ESCALAS[k]:,})",
-        key="escala",
-        horizontal=True,
-        help="El valor por crédito se actualiza automáticamente.",
-    )
-    st.number_input("Créditos administrativos", min_value=0.0, step=0.1, format="%.2f", key="adm",
-                    help="Total del periodo, incluidos los créditos extra académicos. Mínimo 3.8.")
-    c1, c2 = st.columns(2)
-    c1.number_input("Créditos extra académicos", min_value=0.0, step=0.1, format="%.2f", key="extra")
-    c2.number_input("Derecho de enseñanza (S/)", min_value=0.0, step=1.0, format="%.2f", key="derecho")
-    st.button("Restablecer", on_click=restablecer)
+    st.markdown('<div class="tag">1. Tus datos</div>', unsafe_allow_html=True)
+    valor = ESCALAS[alumno.escala]
+    st.markdown(f"""
+    <div class="fixed"><div class="k">Tu escala <span class="src">Asignada por el sistema</span></div>
+      <div class="v">Escala {alumno.escala}</div><div class="h">{soles(valor)} por crédito</div></div>
+    <div class="fixed"><div class="k">Derecho de matrícula <span class="src">Monto fijo</span></div>
+      <div class="v">{soles(DERECHO_MATRICULA)}</div><div class="h">Se cobra una sola vez, en la cuota 1.</div></div>
+    """, unsafe_allow_html=True)
 
-r = calcular(st.session_state["escala"], st.session_state["adm"], st.session_state["extra"], st.session_state["derecho"])
+    if alumno.tiene_matricula:
+        st.markdown(f"**Tus cursos matriculados en {PERIODO}** "
+                    f'<span class="src">Tomado de tu matrícula</span>', unsafe_allow_html=True)
+        st.dataframe(
+            [{"Curso": f"{c.codigo} · {c.nombre}", "Tipo": "Taller" if c.es_taller else "Curso",
+              "Créditos": c.creditos} for c in alumno.cursos],
+            hide_index=True, width="stretch",
+        )
+        creditos_cursos, creditos_talleres = alumno.creditos_cursos, alumno.creditos_talleres
+        st.caption(f"Créditos de cursos: **{fmt(creditos_cursos)}** · Créditos de talleres: **{fmt(creditos_talleres)}**")
+    else:
+        st.info(f"Aún no tienes matrícula registrada para {PERIODO}. Ingresa los créditos que piensas llevar "
+                "para estimar tus cuotas.")
+        creditos_cursos = st.number_input("Créditos de cursos", min_value=0.0, max_value=40.0, value=20.0,
+                                          step=PASO_CREDITOS, format="%.1f",
+                                          help="Suma de créditos de tus cursos, sin contar talleres.")
+        creditos_talleres = st.number_input("Créditos de talleres (extra académicos)", min_value=0.0, max_value=10.0,
+                                            value=1.0, step=PASO_CREDITOS, format="%.1f")
+
+r = calcular(alumno.escala, creditos_cursos, creditos_talleres)
 
 with col_out:
-    st.markdown('<div class="tag">2. Resultado</div>', unsafe_allow_html=True)
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Escala", st.session_state["escala"])
-    m2.metric("Valor por crédito", soles(r.valor_credito))
-    m3.metric("Créditos adm.", f"{st.session_state['adm']:.2f}")
-    m4.metric("Extra académicos", f"{st.session_state['extra']:.2f}")
-
+    st.markdown('<div class="tag">2. Tus cuotas</div>', unsafe_allow_html=True)
     for e in r.errores:
         st.error(e)
     for w in r.advertencias:
         st.warning(w)
+    if not r.errores:
+        html = []
+        for c in r.cuotas:
+            html.append(f'<div class="cuota{" first" if c.numero == 1 else ""}"><div class="n">{c.numero}</div>'
+                        f'<div><div class="t">Cuota {c.numero}</div><div class="d">{c.glosa}</div></div>'
+                        f'<div class="m">{soles(c.monto)}</div></div>')
+        html.append(f'<div class="total"><span class="l">Total del periodo</span><span class="m">{soles(r.total)}</span></div>')
+        st.markdown("".join(html), unsafe_allow_html=True)
 
-    ok = not r.errores
-    html = []
-    for i, monto in enumerate(r.cuotas, start=1):
-        if i == 1:
-            det = f"{CREDITOS_CUOTA_1:.2f} créditos × {soles(r.valor_credito)} + {soles(st.session_state['derecho'])} derecho de enseñanza"
-        else:
-            det = (f"{r.creditos_adm_por_cuota:.2f} créditos administrativos + {r.creditos_extra_por_cuota:.2f} créditos extra académicos "
-                   f"({r.creditos_adm_por_cuota + r.creditos_extra_por_cuota:.2f} × {soles(r.valor_credito)})")
-        html.append(f'<div class="cuota{" first" if i == 1 else ""}"><div class="n">{i}</div>'
-                    f'<div><div class="t">Cuota {i}</div><div class="d">{det}</div></div>'
-                    f'<div class="m">{soles(monto) if ok else "—"}</div></div>')
-    html.append(f'<div class="total"><span class="l">Total del periodo</span>'
-                f'<span class="m">{soles(r.total) if ok else "—"}</span></div>')
-    st.markdown("".join(html), unsafe_allow_html=True)
+if not r.errores:
+    st.markdown('<div class="tag">3. ¿Cómo se calcula tu boleta?</div>', unsafe_allow_html=True)
+    st.markdown("".join(
+        f'<div class="step"><div class="i">{n}</div><div><div class="ti">{t}</div><div class="tx">{x}</div></div></div>'
+        for n, (t, x) in enumerate(explicacion(r), start=1)), unsafe_allow_html=True)
 
-    if ok:
-        resumen = "\n".join([
-            f"Simulación de cuotas – Pregrado {periodo}",
-            f"Escala {st.session_state['escala']} (S/ {r.valor_credito:,.2f} por crédito) · "
-            f"{st.session_state['adm']:.2f} créditos administrativos, {st.session_state['extra']:.2f} extra académicos",
-            *[f"Cuota {i}: {soles(m)}" for i, m in enumerate(r.cuotas, start=1)],
-            f"Total del periodo: {soles(r.total)}",
-            "Montos referenciales, sujetos a validación.",
-        ])
-        with st.expander("Resumen para copiar"):
-            st.code(resumen, language=None)
+    st.markdown('<div class="tag">4. Guarda tu simulación</div>', unsafe_allow_html=True)
+    st.download_button("Descargar resumen en PDF", data=generar_pdf(r, PERIODO),
+                       file_name=f"Simulacion_cuotas_{PERIODO}.pdf", mime="application/pdf", type="primary")
+    st.markdown("**Resumen para copiar**")
+    st.code(resumen_texto(r), language=None)
 
-    with st.expander("¿Cómo se calcula?"):
-        st.markdown(
-            "1. **Cuota 1:** 3.8 créditos administrativos × valor por crédito + derecho de enseñanza.\n"
-            "2. **Cuotas 2 a 5:** los créditos administrativos restantes (sin los extra académicos ni los 3.8 de la cuota 1) "
-            "se reparten en partes iguales, y el importe de los créditos extra académicos también se divide entre las 4 cuotas.\n"
-            "3. Cada cuota se redondea a 2 decimales."
-        )
-    with st.expander("Escalas de pago 2026"):
-        st.table({"Escala": list(ESCALAS), "Valor por crédito (S/)": [f"{v:,.2f}" for v in ESCALAS.values()]})
-
-    st.markdown('<div class="disc">Montos referenciales. Valida los importes definitivos según las disposiciones '
-                'institucionales vigentes antes de comunicarlos.</div>', unsafe_allow_html=True)
+st.markdown('<div class="disc">Montos referenciales. Los importes definitivos son los que figuran en tu boleta.</div>',
+            unsafe_allow_html=True)
